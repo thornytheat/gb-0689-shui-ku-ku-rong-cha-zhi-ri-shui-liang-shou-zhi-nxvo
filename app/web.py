@@ -5,7 +5,7 @@ from app.config import TITLE,MODULES,STAGES,COLUMNS,SAMPLES,DEFAULTS
 def view(stage):
     if not 1<=stage<=7: return "页面不存在",404
     run_id=request.args.get("run")
-    result=store.fetch(run_id) if run_id else run()
+    result=store.fetch(run_id) if run_id else run(supersede=False)
     sample=(SAMPLES/"dirty.csv").read_text(encoding="utf-8-sig")
     data=result["stages"][stage-1]
     curve=result["curve"]

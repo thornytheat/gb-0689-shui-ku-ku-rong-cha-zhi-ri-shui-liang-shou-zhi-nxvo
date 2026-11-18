@@ -46,7 +46,7 @@ def create_app():
         return jsonify(store.review(run_id,data.get("version"),data.get("decision")))
     @app.get("/api/evidence.csv")
     def evidence():
-        result=store.fetch(request.args["run"]) if request.args.get("run") else run()
+        result=store.fetch(request.args["run"]) if request.args.get("run") else run(supersede=False)
         stream=io.StringIO(newline="");writer=csv.writer(stream)
         writer.writerow(["批次","行号","主键","原因码","证据"])
         for row in result.get("records",[]):

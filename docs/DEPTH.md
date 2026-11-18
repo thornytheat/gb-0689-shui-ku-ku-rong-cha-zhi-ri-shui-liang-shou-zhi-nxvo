@@ -1,7 +1,7 @@
 # 深度登记 水库库容插值与日水量收支
 
 - 规模：中型
-- 核心规则：单调水位库容曲线分段线性插值；流量梯形积分；缺口超限不插补，日边界拆分且收支误差显式归因
+- 核心规则：单调水位库容曲线分段线性插值；流量梯形积分；缺口超限不插补，日边界拆分且收支误差显式归因；水位检定仅给偏移范围时按整天共用偏移给出收支差上下界
 - 使用者与工作流：水库调度数据员；采信水位流量日志，复核日库容变化与入出库偏差
 
 ## 功能模块
@@ -13,7 +13,7 @@
 | M3 流量积分 | 梯形积分并定位缺口 | `/api/m3` | `app/modules/m3_integrate/rules.py` `app/modules/m3_integrate/service.py` | `tests/test_m3_integrate.py` |
 | M4 库容换算 | 按曲线分段换算库容 | `/api/m4` | `app/modules/m4_storage/rules.py` `app/modules/m4_storage/service.py` | `tests/test_m4_storage.py` |
 | M5 日收支 | 跨午夜切分日水量账 | `/api/m5` | `app/modules/m5_budget/rules.py` `app/modules/m5_budget/service.py` | `tests/test_m5_budget.py` |
-| M6 异常复核 | 按缺测优先裁决超差 | `/api/m6` | `app/modules/m6_review/rules.py` `app/modules/m6_review/service.py` | `tests/test_m6_review.py` |
+| M6 异常复核 | 按缺测优先裁决超差，显示收支差可能范围 | `/api/m6` | `app/modules/m6_review/rules.py` `app/modules/m6_review/service.py` | `tests/test_m6_review.py` |
 | M7 重算留痕 | 核对总积分与重算水位 | `/api/m7` | `app/modules/m7_trace/rules.py` `app/modules/m7_trace/service.py` | `tests/test_m7_trace.py` |
 
 ## 陷阱登记
@@ -28,11 +28,13 @@
 | TRAP-14 | 同刻水文矛盾 | 静默填补或算错 | 明确隔离和守恒 | `app/modules/m2_curve/rules.py` | `tests/test_m2_curve.py::test_real_conflict` |
 | TRAP-15 | 升每秒换算 | 静默填补或算错 | 明确隔离和守恒 | `app/modules/m2_curve/rules.py` | `tests/test_m2_curve.py::test_unit_conversion` |
 | TRAP-23 | 午夜切分 | 静默填补或算错 | 明确隔离和守恒 | `app/modules/m5_budget/rules.py` | `tests/test_m5_budget.py::test_midnight_split` |
+| TRAP-24 | 水位检定只给偏移范围，整天共用同一偏移 | 取中点或两端各自换算，跨折点的日子误判通过或超差 | 区间内按折点求收支差上下界，跨容差待复核，越出曲线待复核 | `app/offset.py` `app/modules/m5_budget/rules.py` `app/modules/m6_review/rules.py` | `tests/test_m6_review.py::test_knot_budget_range` `tests/test_m6_review.py::test_range_straddling_tolerance_needs_review` |
+| TRAP-25 | 偏移范围更新后旧结论 | 旧批次仍可复核或重跑覆盖新结论 | 新批次令同输入旧批次失效并返回409，重跑同一批不新增记录 | `app/store.py` | `tests/test_e2e.py::test_offset_change_supersedes_old_run` |
 
 ## 对账规则
 
 输入逻辑行数 = 采信行数 + 隔离行数；空行单列。每条重复、冲突、超限、缺失均保留原始行号与原因码。计算阶段的输出数量可聚合，原始采信records始终保留，业务平衡另按模块给出的重量、时长、电量或座席数量核对。
-相同输入摘要、规则版本、参数产生相同批次ID。运行原子插入SQLite；复核使用整数版本乐观锁。
+相同输入摘要、规则版本、参数产生相同批次ID。运行原子插入SQLite；复核使用整数版本乐观锁。参数（含水位偏移范围）更新产生新批次，同输入旧批次结论失效并拒绝复核，重跑同一批不新增复核记录。
 
 ## 已知不覆盖
 
